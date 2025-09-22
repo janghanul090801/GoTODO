@@ -13,6 +13,36 @@ import (
 	"strings"
 )
 
+func loadIgnores(filename string) ([]string, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var patterns []string
+	for _, line := range strings.Split(string(data)+"\n*.exe", "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns, nil
+}
+
+func isIgnored(path string, patterns []string) bool {
+	for _, pattern := range patterns {
+		match, _ := filepath.Match(pattern, filepath.Base(path))
+		if match {
+			return true
+		}
+		// 폴더 무시
+		if strings.HasSuffix(pattern, "/") && strings.HasPrefix(path, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // whereismyfuckingtodoCmd represents the whereismyfuckingtodo command
 var whereismyfuckingtodoCmd = &cobra.Command{
 	Use:   "whereismyfuckingtodo",
@@ -38,12 +68,17 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 				return nil
 			}
 
+			ignores, err := loadIgnores(".gotodoignores")
+			if err != nil {
+				return err
+			}
+
 			if ext == "" {
-				if !info.IsDir() {
+				if !info.IsDir() && !isIgnored(path, ignores) {
 					files = append(files, path)
 				}
 			} else {
-				if !info.IsDir() && filepath.Ext(path) == ext {
+				if !info.IsDir() && filepath.Ext(path) == ext && !isIgnored(path, ignores) {
 					files = append(files, path)
 				}
 			}
