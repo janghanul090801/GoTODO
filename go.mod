@@ -1,4 +1,4 @@
-module k-in.com/gotodo
+module github.com/janghanul090801/gotodo
 
 go 1.24.1
 
