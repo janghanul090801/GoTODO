@@ -70,7 +70,7 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 
 			ignores, err := loadIgnores(".gotodoignores")
 			if err != nil {
-				return err
+				ignores = []string{}
 			}
 
 			if ext == "" {
