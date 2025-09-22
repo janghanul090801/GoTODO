@@ -132,6 +132,6 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(whereismyfuckingtodoCmd)
-	whereismyfuckingtodoCmd.Flags().String("path", "", "파일 검색 경로를 지정해주세요(default=./)")
-	whereismyfuckingtodoCmd.Flags().String("ext", "", "검색할 파일 확장자를 지정해주세요(default=.go)")
+	whereismyfuckingtodoCmd.Flags().String("path", "", "파일 검색 경로를 지정합니다(default=./)")
+	whereismyfuckingtodoCmd.Flags().String("ext", "", "검색할 파일 확장자를 지정합니다(default=.*)")
 }
