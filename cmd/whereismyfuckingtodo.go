@@ -6,6 +6,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	ignore "github.com/sabhiram/go-gitignore"
 	"github.com/spf13/cobra"
 	"log"
 	"os"
@@ -13,34 +14,40 @@ import (
 	"strings"
 )
 
-func loadIgnores(filename string) ([]string, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	var patterns []string
-	for _, line := range strings.Split(string(data)+"\n*.exe", "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+var ig *ignore.GitIgnore
+
+func loadIgnores(filename string) {
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		defaultIgnores := []string{
+			".git/",
+			".idea/",
+			"*.exe",
+			"gotodo",
 		}
-		patterns = append(patterns, line)
+
+		file, err := os.Create(filename)
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
+
+		for _, line := range defaultIgnores {
+			_, _ = file.WriteString(line + "\n")
+		}
 	}
-	return patterns, nil
+
+	var err error
+	ig, err = ignore.CompileIgnoreFile(filename)
+	if err != nil {
+		panic(err)
+	}
 }
 
-func isIgnored(path string, patterns []string) bool {
-	for _, pattern := range patterns {
-		match, _ := filepath.Match(pattern, filepath.Base(path))
-		if match {
-			return true
-		}
-		// 폴더 무시
-		if strings.HasSuffix(pattern, "/") && strings.HasPrefix(path, pattern) {
-			return true
-		}
+func isIgnored(path string) bool {
+	if ig == nil {
+		return false
 	}
-	return false
+	return ig.MatchesPath(path)
 }
 
 // whereismyfuckingtodoCmd represents the whereismyfuckingtodo command
@@ -62,26 +69,29 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 
 		ext, _ := cmd.Flags().GetString("ext")
 
+		loadIgnores(".gotodoignores")
+
 		err := filepath.Walk(pathInfo, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				fmt.Println(err)
 				return nil
 			}
 
-			ignores, err := loadIgnores(".gotodoignores")
-			if err != nil {
-				ignores = []string{}
+			ignoreBase := ".gotodoignores"
+			ignoreDir := filepath.Dir(ignoreBase)
+			relPath, err := filepath.Rel(ignoreDir, path)
+
+			if isIgnored(relPath) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
 
-			if ext == "" {
-				if !info.IsDir() && !isIgnored(path, ignores) {
-					files = append(files, path)
-				}
-			} else {
-				if !info.IsDir() && filepath.Ext(path) == ext && !isIgnored(path, ignores) {
-					files = append(files, path)
-				}
+			if !info.IsDir() && (ext == "" || filepath.Ext(path) == ext) {
+				files = append(files, path)
 			}
+
 			return nil
 		})
 
@@ -101,12 +111,13 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 			lineNumber := 1
 			for scanner.Scan() {
 				line := scanner.Text()
-				if strings.Contains(line, "TODO") {
+				idx := strings.Index(line, "TODO")
+				if idx != -1 {
 					fmt.Printf("%s col: %d, row: %d, detail: %s\n",
 						filename,
+						idx+1,
 						lineNumber,
-						strings.Index(line, "TODO")+1, // 열 위치 (1부터 시작)
-						line[strings.Index(line, "TODO"):len(line)-1],
+						line[idx:],
 					)
 				}
 				lineNumber++
@@ -114,6 +125,7 @@ var whereismyfuckingtodoCmd = &cobra.Command{
 			if err := scanner.Err(); err != nil {
 				log.Fatal(err)
 			}
+			file.Close()
 		}
 	},
 }
